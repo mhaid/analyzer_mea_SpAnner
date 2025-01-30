@@ -51,7 +51,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -210,95 +210,6 @@ def do_xlsx_conversion(filename):
             
 
 
-    # # Extracting data from excel sheet
-    # for group_setting_id in settings["groups"]:
-
-    #     # Fetch object for group settings
-    #     group_setting = settings["groups"][group_setting_id]
-
-    #     # Create result object for group
-    #     results[group_setting["name"]+" Raw"] = pd.DataFrame()
-    #     results[group_setting["name"]+" Rel"] = pd.DataFrame()
-
-
-
-    #     print("Fetching data of group '" + group_setting["name"] + "'")
-
-    #     # Split channel list of current group into array
-    #     channels = group_setting["channels"].split(',')
-
-    #     # Iterate trough each channel of the current group
-    #     for channel in channels:
-
-    #         # Remove all non-digit characters from string
-    #         channel = ''.join(filter(str.isdigit, channel))
-    #         # Add Leading 'Ch'
-    #         channel = "Ch" + channel
-
-    #         # Find the index of the column
-    #         col_index = excel_sheet.columns.get_loc(channel)
-
-    #         # Get the column before
-    #         col_before_name = excel_sheet.columns[col_index - 1]
-
-    #         # Select this column from the DataFrame
-    #         col_before = excel_sheet[col_before_name]
-
-    #         # Check if the column header is correct
-    #         if col_before[0] == "NoS/Minute":
-
-    #             result_ch_raw = []
-    #             result_ch_rel = []
-
-    #             # Calculate index of periods pre, during, post
-    #             pre_index_start = settings["index_start"] - settings["baseline_count"]
-    #             pre_index_end = settings["index_start"] - 1
-    #             dur_index_start = settings["index_start"]
-    #             dur_index_end = settings["index_end"]
-    #             post_index_start = settings["index_end"] + 1
-    #             post_index_end = len(col_before) - 1
-                
-    #             # Fetch baseline period
-    #             baseline = calc_baseline(col_before, pre_index_start, pre_index_end)
-
-    #             # Fetch pre-application period
-    #             results_pre = calc_period_rel(col_before, pre_index_start, pre_index_end, baseline)
-    #             print("Fetched " + str(len(results_pre["rel"])) + " entries for pre-application period.")
-    #             # Fetch application period
-    #             results_dur = calc_period_rel(col_before, dur_index_start, dur_index_end, baseline)
-    #             print("Fetched " + str(len(results_dur["rel"])) + " entries for application period.")
-    #             # Fetch post-application period
-    #             results_post = calc_period_rel(col_before, post_index_start, post_index_end, baseline)
-    #             print("Fetched " + str(len(results_post["rel"])) + " entries for post-application period.")
-
-    #             # Calculate T-Test for pre vs. during
-    #             results_ttest = calc_ttest(results_pre["raw"], results_dur["raw"])
-                
-    #             # Add pre-measurements as dataframe rows
-    #             result_ch_raw.extend(results_pre["raw"])
-    #             result_ch_rel.extend(results_pre["rel"])
-    #             # Add dur-measurements as dataframe rows
-    #             result_ch_raw.extend(results_dur["raw"])
-    #             result_ch_rel.extend(results_dur["rel"])
-    #             # Add post-measurements as dataframe rows
-    #             result_ch_raw.extend(results_post["raw"])
-    #             result_ch_rel.extend(results_post["rel"])
-    #             # Add baseline as dataframe row
-    #             result_ch_rel.append(baseline)
-    #             # Add t-test as dataframe row
-    #             result_ch_raw.append(results_ttest["t"])
-    #             result_ch_raw.append(results_ttest["p"])
-
-                
-    #             # Add label in the first column
-    #             add_label_df(results[group_setting["name"] + " Raw"], len(results_pre["raw"]), len(results_dur["raw"]), len(results_post["raw"]), False, True)
-    #             add_label_df(results[group_setting["name"] + " Rel"], len(results_pre["rel"]), len(results_dur["rel"]), len(results_post["rel"]), True, False)
-
-
-    #             results[group_setting["name"] + " Rel"][channel] = result_ch_rel
-    #             results[group_setting["name"] + " Raw"][channel] = result_ch_raw
-
-
     # create a excel writer object
     with pd.ExcelWriter(OUTPUT_DIR + "ANALYSIS_" + filename) as writer:
         
@@ -344,8 +255,11 @@ def fetch_settings(filename, data):
         print("Substance application start set to data index " + str(settings["index_start"]) + ".")
     # Dynamic setting
     else:
+        data_corrected = data["Time"]
+        data_corrected.index = data_corrected.index + 2
+        data_corrected = pd.concat([pd.Series(["*","*"]), data_corrected])
         # Print time column
-        print(data["Time"])
+        print(data_corrected)
 
         # Fetch index for start of substance application
         settings["index_start"] = 0
@@ -371,11 +285,12 @@ def fetch_settings(filename, data):
     else:
         # Fetch index for end of substance application
         settings["index_end"] = 0
-        range_min = settings["index_start"]
-        range_max = len(data["Time"]) - 2
+        range_min = settings["index_start"] + EXCEL_SHEET_HEADERLINES
+        range_max = len(data["Time"]) - 2 + EXCEL_SHEET_HEADERLINES
         while not int(settings["index_end"]) in range(range_min, range_max + 1):
             settings["index_end"] = int(input("Data index for the end of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
 
+        settings["index_end"] = settings["index_end"] - EXCEL_SHEET_HEADERLINES
 
     return settings
 
@@ -786,7 +701,7 @@ for filename in os.listdir( INPUT_DIR ):
 print("----------")
 print("")
 print("Processed all files in the directory '"+OUTPUT_DIR+"'.")
-print("Converted "+str(filesconverted_cnt)+" files.")
+print("Analyzed "+str(filesconverted_cnt)+" files.")
 print("")
 print("Thanks for using.")
 print("Have a good day!")
