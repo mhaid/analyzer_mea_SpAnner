@@ -51,7 +51,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -62,8 +62,18 @@ OUTPUT_DIR = os.path.abspath(os.path.dirname(__file__))+"/output/" # Use directo
 
 
 # Setting Constants
-EXCEL_SHEET_NAME = "P2PAmplitudes2Plot"
-EXCEL_SHEET_HEADERLINES = 2
+EXCEL_SHEET_SPIKE_NAME = "P2PAmplitudes2Plot"       # Name of excel sheet containing spike information
+EXCEL_SHEET_SPIKE_ADDITIONALHEADERS = 1             # Additional rows of (sub)headers
+EXCEL_SHEET_SPIKE_COL_TIME = "Time"                 # Column name for time
+
+EXCEL_SHEET_BURST_NAME = "Synopsis"                 # Name of excel sheet containing burst information
+EXCEL_SHEET_BURSTS_ADDITIONALHEADERS = 0            # Additional rows of (sub)headers
+EXCEL_SHEET_BURST_COL_FILENAME = "Filename"         # Column name for time
+EXCEL_SHEET_BURST_COL_TIME = "Time"                 # Column name for time
+EXCEL_SHEET_BURST_COL_FIELDTYPE = "FieldType"       # Column name for fieldtype
+EXCEL_SHEET_BURST_FIELDTYPE_BURST = "NoB/Minute"  # FieldType of Burst per Minute
+
+
 PVAL_TRESHOLD = 0.06
 # below setting contants can be made dynamic by adding a # at the start of the line. The user will be asked for input
 BASELINE_COUNT = 7
@@ -94,11 +104,16 @@ def do_xlsx_conversion(filename):
     print("Opening excel file succeeded.")
 
     # Open correct sheet
-    excel_sheet = excel_file.parse(EXCEL_SHEET_NAME)
-    print("Fetching sheet '" + EXCEL_SHEET_NAME + "' succeeded.")
+    excel_sheet_spike = excel_file.parse(EXCEL_SHEET_SPIKE_NAME)
+    print("Fetching sheet '" + EXCEL_SHEET_SPIKE_NAME + "' succeeded.")
+
+
+    # Open correct sheet
+    excel_sheet_burst = excel_file.parse(EXCEL_SHEET_BURST_NAME)
+    print("Fetching sheet '" + EXCEL_SHEET_BURST_NAME + "' succeeded.")
 
     # Fetch user settings
-    settings = fetch_settings(filename, excel_sheet)
+    settings = fetch_settings(filename, excel_sheet_spike)
 
     # Create result object
     results = {}
@@ -109,49 +124,51 @@ def do_xlsx_conversion(filename):
     dur_index_start = settings["index_start"]
     dur_index_end = settings["index_end"]
     post_index_start = settings["index_end"] + 1
-    post_index_end = len(excel_sheet.index) - 1
+    post_index_end = len(excel_sheet_spike.index) - 1
 
     # Add dataframe for each group
     for group_name in settings["groups"]:
 
         # Create result object for group
-        results[group_name + "_Raw"] = pd.DataFrame()
-        results[group_name + "_Rel"] = pd.DataFrame()
+        results[group_name + "_NoS_Abs"] = pd.DataFrame()
+        results[group_name + "_NoS_Rel"] = pd.DataFrame()
+        results[group_name + "_NoB_Abs"] = pd.DataFrame()
 
         # Add label in the first column
-        add_label_df(results[group_name + "_Raw"], (pre_index_end - pre_index_start + 1), (dur_index_end - dur_index_start + 1), (post_index_end - post_index_start + 1), True, False)
-        add_label_df(results[group_name + "_Rel"], (pre_index_end - pre_index_start + 1), (dur_index_end - dur_index_start + 1), (post_index_end - post_index_start + 1), False, True)
+        add_label_df(results[group_name + "_NoS_Abs"], (pre_index_end - pre_index_start + 1), (dur_index_end - dur_index_start + 1), (post_index_end - post_index_start + 1), True, True, False)
+        add_label_df(results[group_name + "_NoS_Rel"], (pre_index_end - pre_index_start + 1), (dur_index_end - dur_index_start + 1), (post_index_end - post_index_start + 1), False, False, True)
+        add_label_df(results[group_name + "_NoB_Abs"], (pre_index_end - pre_index_start + 1), (dur_index_end - dur_index_start + 1), (post_index_end - post_index_start + 1), False, False, True)
 
 
     # Filter columns for channels
-    cols_channel = [col for col in excel_sheet.columns if col.startswith('Ch')]
+    cols_channel = [col for col in excel_sheet_spike.columns if col.startswith('Ch')]
 
     # Iterate trough all channels
     for col_channel in cols_channel:
 
         # Find the index of the column
-        col_index = excel_sheet.columns.get_loc(col_channel)
+        col_index = excel_sheet_spike.columns.get_loc(col_channel)
 
         # Get the column before
-        col_before_name = excel_sheet.columns[col_index - 1]
+        col_before_name = excel_sheet_spike.columns[col_index - 1]
 
         # Select this column from the DataFrame
-        col_before = excel_sheet[col_before_name]
+        col_before = excel_sheet_spike[col_before_name]
 
         # Check if the column header is correct
         if col_before[0] == "NoS/Minute":
 
-            # Extract values
-            values_pre_raw = extract_period(col_before, pre_index_start, pre_index_end)
-            values_dur_raw = extract_period(col_before, dur_index_start, dur_index_end)
-            values_post_raw = extract_period(col_before, post_index_start, post_index_end)
+            # Extract spikes
+            spikes_pre_raw = extract_period(col_before, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+            spikes_dur_raw = extract_period(col_before, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+            spikes_post_raw = extract_period(col_before, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
 
 
 
             # Calc statistics for channel
             print("-----------------------------------------------------------------------")
             print("Calculating statistics for " + col_channel)
-            stat = calc_statistic(values_pre_raw, values_dur_raw)
+            stat = calc_statistic(spikes_pre_raw, spikes_dur_raw)
 
 
             # Check for valid return
@@ -162,43 +179,86 @@ def do_xlsx_conversion(filename):
                     print("Baseline-Period is significant from Application-Period")
 
                     # Calculate averages (pre/baseline and dur)
-                    average_pre_raw = calc_average(values_pre_raw)
-                    average_dur_raw = calc_average(values_dur_raw)
-                    print("-> Calculated averages for baseline-/application-period: " + str(average_pre_raw) + " / " + str(average_dur_raw))
+                    average_spikes_pre_raw = calc_average(spikes_pre_raw)
+                    average_spikes_dur_raw = calc_average(spikes_dur_raw)
+                    print("-> Calculated spike averages for baseline-/application-period: " + str(average_spikes_pre_raw) + " / " + str(average_spikes_dur_raw))
 
 
-                    # Combine values
-                    values_raw = combine_values([values_pre_raw,values_dur_raw,values_post_raw])
+                    # Combine spikes
+                    spikes_raw = combine_values([spikes_pre_raw,spikes_dur_raw,spikes_post_raw])
 
 
-                    # Calc relative values
-                    values_rel = calc_period_rel(values_raw, average_pre_raw)
+                    # Calc relative spikes
+                    spikes_rel = calc_period_rel(spikes_raw, average_spikes_pre_raw)
 
-                    # Add baseline
-                    values_rel = append_baseline(values_rel, average_pre_raw)
+                    # Calc %change baseline/application-period
+                    if average_spikes_pre_raw != 0:
+                        spikes_change = average_spikes_dur_raw / average_spikes_pre_raw * 100
+                    else:
+                        spikes_change = 0
+
+                    # Add lines to dataframe
+                    spikes_rel = append_line(spikes_rel, average_spikes_pre_raw)
+                    spikes_rel = append_line(spikes_rel, average_spikes_dur_raw)
+                    spikes_rel = append_line(spikes_rel, spikes_change)
 
 
                     # Add statistics
-                    values_raw_stat = values_raw
-                    values_raw_stat = append_statistics(values_raw_stat, stat)
+                    spikes_raw_stat = spikes_raw
+                    spikes_raw_stat.insert(0, spikes_change)
+                    spikes_raw_stat = append_statistics(spikes_raw_stat, stat)
+
+
+                    # ---- Compute Bursts per Minute
+                    # Merge time and NoB into one dataframe
+                    burst_df = merge_timeburst(excel_sheet_burst)
+
+                    # Fetch burst for channel
+                    burst_channel = burst_df[col_channel]
+                    print("Merged Burst per Minute in dataframe (" + str(len(burst_channel)) + " entries for channel)")
+
+
+                    # Extract bursts
+                    bursts_pre_raw = extract_period(burst_channel, pre_index_start, pre_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+                    bursts_dur_raw = extract_period(burst_channel, dur_index_start, dur_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+                    bursts_post_raw = extract_period(burst_channel, post_index_start, post_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+
+                    # Calculate averages (pre/baseline and dur)
+                    average_bursts_pre_raw = calc_average(bursts_pre_raw)
+                    average_bursts_dur_raw = calc_average(bursts_dur_raw)
+                    print("-> Calculated burst averages for baseline-/application-period: " + str(average_bursts_pre_raw) + " / " + str(average_bursts_dur_raw))
+                    
+                    # Combine bursts
+                    bursts_raw = combine_values([bursts_pre_raw,bursts_dur_raw,bursts_post_raw])
+
+                    # Calc %change baseline/application-period
+                    if average_bursts_pre_raw != 0:
+                        bursts_change = average_bursts_dur_raw / average_bursts_pre_raw * 100
+                    else:
+                        bursts_change = 0
+
+                    # Add lines to dataframe
+                    bursts_raw = append_line(bursts_raw, average_bursts_pre_raw)
+                    bursts_raw = append_line(bursts_raw, average_bursts_dur_raw)
+                    bursts_raw = append_line(bursts_raw, bursts_change)
+
 
 
                     # Check for excitation or inhibition
-                    if average_pre_raw < average_dur_raw:
+                    appl_group = 0
+                    if average_spikes_pre_raw < average_spikes_dur_raw:
                         print("Excitation was detected")
-
-                        # Add to dataframe
-                        add_dataframe_column(results[settings["groups"][0] + "_Raw"], col_channel, values_raw_stat)
-                        add_dataframe_column(results[settings["groups"][0] + "_Rel"], col_channel, values_rel)
+                        appl_group = 0
 
                     else:
                         print("Inhibition was detected")
-
-                        # Add to dataframe
-                        add_dataframe_column(results[settings["groups"][1] + "_Raw"], col_channel, values_raw_stat)
-                        add_dataframe_column(results[settings["groups"][1] + "_Rel"], col_channel, values_rel)
+                        appl_group = 1
 
 
+                    # Add to dataframe
+                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Abs"], col_channel, spikes_raw_stat)
+                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Rel"], col_channel, spikes_rel)
+                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoB_Abs"], col_channel, bursts_raw)
 
                 else:
                     print("Baseline-Period is NOT significant from Application-Period")
@@ -207,7 +267,10 @@ def do_xlsx_conversion(filename):
             else:
                 print("Statistics could not be calculated")
                 print("Channel will be ignored")
-            
+        
+        else:
+            print("Correct column could not be found")
+            print("Channel will be ignored")
 
 
     # create a excel writer object
@@ -223,8 +286,8 @@ def fetch_settings(filename, data):
 
     settings = {
         "baseline_count": 0,
-        "index_start": 0,
-        "index_end": 0,
+        "index_start": 0,   	    # Index of row for application-start starting from 1
+        "index_end": 0,             # Index of row for application-end starting from 1
         "groups": [
             "Excited",
             "Inhibited"
@@ -242,11 +305,14 @@ def fetch_settings(filename, data):
     else:
         settings["baseline_count"] = 0
         range_min = 1
-        range_max = len(data["Time"]) - 3
+        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 3
         while not int(settings["baseline_count"]) in range(range_min, range_max + 1):
             settings["baseline_count"] = int(input("Number of measurements before substance application to use for calculating the baseline (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
     
 
+
+    # Calculate the offset needed to compensate for all rows of header
+    row_offset_header = 1 + EXCEL_SHEET_SPIKE_ADDITIONALHEADERS
 
     # --- Setting for 'index_start'
     # Static setting
@@ -255,20 +321,21 @@ def fetch_settings(filename, data):
         print("Substance application start set to data index " + str(settings["index_start"]) + ".")
     # Dynamic setting
     else:
-        data_corrected = data["Time"]
+        data_corrected = data[EXCEL_SHEET_SPIKE_COL_TIME]
         data_corrected.index = data_corrected.index + 2
         data_corrected = pd.concat([pd.Series(["*","*"]), data_corrected])
         # Print time column
         print(data_corrected)
+        print("File: " + filename)
 
         # Fetch index for start of substance application
         settings["index_start"] = 0
-        range_min = settings["baseline_count"] + 1 + EXCEL_SHEET_HEADERLINES
-        range_max = len(data["Time"]) - 2 + EXCEL_SHEET_HEADERLINES
+        range_min = settings["baseline_count"] + 1 + row_offset_header
+        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 2 + row_offset_header
         while not int(settings["index_start"]) in range(range_min, range_max + 1):
             settings["index_start"] = int(input("Data index for the start of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
 
-        settings["index_start"] = settings["index_start"] - EXCEL_SHEET_HEADERLINES
+        settings["index_start"] = settings["index_start"] - row_offset_header
 
 
 
@@ -285,12 +352,12 @@ def fetch_settings(filename, data):
     else:
         # Fetch index for end of substance application
         settings["index_end"] = 0
-        range_min = settings["index_start"] + EXCEL_SHEET_HEADERLINES
-        range_max = len(data["Time"]) - 2 + EXCEL_SHEET_HEADERLINES
+        range_min = settings["index_start"] + row_offset_header
+        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 2 + row_offset_header
         while not int(settings["index_end"]) in range(range_min, range_max + 1):
             settings["index_end"] = int(input("Data index for the end of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
 
-        settings["index_end"] = settings["index_end"] - EXCEL_SHEET_HEADERLINES
+        settings["index_end"] = settings["index_end"] - row_offset_header
 
     return settings
 
@@ -300,10 +367,13 @@ def fetch_settings(filename, data):
 
 
 
-def add_label_df(data, len_pre, len_dur, len_post, stats, baseline):
+def add_label_df(data, len_pre, len_dur, len_post, perc_change, stats, averages):
 
     if data.empty:
         states = []
+
+        if perc_change:
+            states.append("%change")
 
         for i in range(len_pre):
             states.append("Pre")
@@ -338,17 +408,22 @@ def add_label_df(data, len_pre, len_dur, len_post, stats, baseline):
             # states.append("Applicable t-stat")
             states.append("Applicable p-value")
 
-        if baseline:
+        if averages:
             states.append("Baseline avg")
+            states.append("Application avg")
+            states.append("%change")
 
         data["State"] = states
 
 
-def extract_period(data, start, end):
+def extract_period(data, start, end, row_offset):
 
     values = []
 
-    for i in range(int(start),int(end)+1):
+    start = int(start) + row_offset - 1
+    end = int(end) + row_offset
+
+    for i in range(start, end):
 
         # Check if entry is a valid integer
         if isinstance(data[i], (int,float)):
@@ -450,9 +525,9 @@ def append_statistics(values, stat):
     return values
 
 
-def append_baseline(values, baseline):
+def append_line(values, line):
 
-    values.append(baseline)
+    values.append(line)
 
     return values
 
@@ -669,6 +744,21 @@ def calc_period_rel(data, baseline):
 
     return data_rel
 
+
+
+
+
+def merge_timeburst(df):
+    
+    time_df = df[[EXCEL_SHEET_BURST_COL_FILENAME, EXCEL_SHEET_BURST_COL_TIME]]
+    nob_df = df.drop([EXCEL_SHEET_BURST_COL_FILENAME, EXCEL_SHEET_BURST_COL_TIME], axis=1)
+
+    time = time_df[time_df[EXCEL_SHEET_BURST_COL_TIME] != '*'].reset_index(drop=True)
+    nob_minute = nob_df[nob_df[EXCEL_SHEET_BURST_COL_FIELDTYPE] == EXCEL_SHEET_BURST_FIELDTYPE_BURST].reset_index(drop=True)
+    
+    merged_df = time.merge(nob_minute, left_index=True, right_index=True)
+
+    return merged_df
 
 
 
