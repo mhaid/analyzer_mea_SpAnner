@@ -51,7 +51,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -78,8 +78,9 @@ PVAL_TRESHOLD = 0.06
 # below setting contants can be made dynamic by adding a # at the start of the line. The user will be asked for input
 BASELINE_COUNT = 7
 DURATION_COUNT = 5
+WASHOUT_COUNT_MIN = 3
+WASHOUT_COUNT_MAX = 10
 # INDEX_START = 23
-# INDEX_END = 28 # Will only take effect if DURATION_COUNT not defined
 
 
 
@@ -124,7 +125,9 @@ def do_xlsx_conversion(filename):
     dur_index_start = settings["index_start"]
     dur_index_end = settings["index_end"]
     post_index_start = settings["index_end"] + 1
-    post_index_end = len(excel_sheet_spike.index) - 1
+    post_index_end = post_index_start + settings["washout_count_max"] - 1
+    if post_index_end >= len(excel_sheet_spike.index):
+        post_index_end = len(excel_sheet_spike.index) - 1
 
     # Add dataframe for each group
     for group_name in settings["groups"]:
@@ -288,6 +291,8 @@ def fetch_settings(filename, data):
         "baseline_count": 0,
         "index_start": 0,   	    # Index of row for application-start starting from 1
         "index_end": 0,             # Index of row for application-end starting from 1
+        "washout_count_min": 0,
+        "washout_count_max": 0,
         "groups": [
             "Excited",
             "Inhibited"
@@ -298,17 +303,16 @@ def fetch_settings(filename, data):
 
     # --- Setting for 'baseline_count'
     # Static setting
-    if 'BASELINE_COUNT' in globals():
-        settings["baseline_count"] = int(BASELINE_COUNT)
-        print("Baseline: Average of " + str(settings["baseline_count"]) + " measurements before substance-application.")
-    # Dynamic setting
-    else:
-        settings["baseline_count"] = 0
-        range_min = 1
-        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 3
-        while not int(settings["baseline_count"]) in range(range_min, range_max + 1):
-            settings["baseline_count"] = int(input("Number of measurements before substance application to use for calculating the baseline (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
+    settings["baseline_count"] = int(BASELINE_COUNT)
+    print("Baseline: Average of " + str(settings["baseline_count"]) + " measurements before substance-application.")
+
     
+    # --- Setting for 'baseline_count'
+    # Static setting
+    settings["washout_count_min"] = int(WASHOUT_COUNT_MIN)
+    settings["washout_count_max"] = int(WASHOUT_COUNT_MAX)
+    print("Washout: Min. " + str(settings["washout_count_min"]) + " / Max. " + str(settings["washout_count_max"]) + " measurements before substance-application.")
+
 
 
     # Calculate the offset needed to compensate for all rows of header
@@ -331,7 +335,7 @@ def fetch_settings(filename, data):
         # Fetch index for start of substance application
         settings["index_start"] = 0
         range_min = settings["baseline_count"] + 1 + row_offset_header
-        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 2 + row_offset_header
+        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - DURATION_COUNT - settings["washout_count_min"] + row_offset_header
         while not int(settings["index_start"]) in range(range_min, range_max + 1):
             settings["index_start"] = int(input("Data index for the start of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
 
@@ -341,23 +345,10 @@ def fetch_settings(filename, data):
 
     # --- Setting for 'index_end'
     # Static setting
-    if 'DURATION_COUNT' in globals():
-        settings["index_end"] = settings["index_start"] + int(DURATION_COUNT) - 1
-        print("Substance application end set to data index " + str(settings["index_end"]) + ".")
-    # Static setting
-    elif 'INDEX_END' in globals():
-        settings["index_end"] = int(INDEX_END)
-        print("Substance application end set to data index " + str(settings["index_end"]) + ".")
-    # Dynamic setting
-    else:
-        # Fetch index for end of substance application
-        settings["index_end"] = 0
-        range_min = settings["index_start"] + row_offset_header
-        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - 2 + row_offset_header
-        while not int(settings["index_end"]) in range(range_min, range_max + 1):
-            settings["index_end"] = int(input("Data index for the end of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
+    settings["index_end"] = settings["index_start"] + int(DURATION_COUNT) - 1
+    print("Substance application end set to data index " + str(settings["index_end"]) + ".")
 
-        settings["index_end"] = settings["index_end"] - row_offset_header
+
 
     return settings
 
