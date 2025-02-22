@@ -45,13 +45,15 @@ SOFTWARE.
 import os
 import pandas as pd
 import scipy
+from datetime import datetime
+import re
 
 
 __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -167,7 +169,6 @@ def do_xlsx_conversion(filename):
             spikes_post_raw = extract_period(col_before, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
 
 
-
             # Calc statistics for channel
             print("-----------------------------------------------------------------------")
             print("Calculating statistics for " + col_channel)
@@ -226,6 +227,7 @@ def do_xlsx_conversion(filename):
                     bursts_dur_raw = extract_period(burst_channel, dur_index_start, dur_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
                     bursts_post_raw = extract_period(burst_channel, post_index_start, post_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
 
+
                     # Calculate averages (pre/baseline and dur)
                     average_bursts_pre_raw = calc_average(bursts_pre_raw)
                     average_bursts_dur_raw = calc_average(bursts_dur_raw)
@@ -276,11 +278,40 @@ def do_xlsx_conversion(filename):
             print("Channel will be ignored")
 
 
+    # Create about page
+    about = pd.DataFrame()
+    about["Desc"] = [
+        "Filename",
+        "Pre-Period Lines",
+        "During-Period Lines",
+        "Post-Period Lines",
+        "Analysis Date",
+        "Tool",
+        "Tool Version",
+        "Tool Author",
+        "Tool Licence",
+    ]
+    about["Value"] = [
+        filename,
+        str(pre_index_end - pre_index_start + 1)   + " (" + str(convert_indexToLine(pre_index_start))  + " to " + str(convert_indexToLine(pre_index_end))  + ")",
+        str(dur_index_end - dur_index_start + 1)   + " (" + str(convert_indexToLine(dur_index_start))  + " to " + str(convert_indexToLine(dur_index_end))  + ")",
+        str(post_index_end - post_index_start + 1) + " (" + str(convert_indexToLine(post_index_start)) + " to " + str(convert_indexToLine(post_index_end)) + ")",
+        datetime.today().strftime('%Y-%m-%d'),
+        "Analyzer for SpAnner Synopsis",
+        __version__,
+        __author__,
+        __license__
+    ]
+    result_complete = {"About": about}
+    result_complete.update(results)
+
+
     # create a excel writer object
     with pd.ExcelWriter(OUTPUT_DIR + "ANALYSIS_" + filename) as writer:
         
-        for dataframe in results:
-            results[dataframe].to_excel(writer, sheet_name=dataframe, index=False)
+        for dataframe in result_complete:
+            result_complete[dataframe].to_excel(writer, sheet_name=dataframe, index=False)
+
 
 
 
@@ -314,13 +345,16 @@ def fetch_settings(filename, data):
     print("Washout: Min. " + str(settings["washout_count_min"]) + " / Max. " + str(settings["washout_count_max"]) + " measurements before substance-application.")
 
 
+    # Fetch / Autodetect line start in name
+    index_start_autodetect = fetch_startline(filename)
 
-    # Calculate the offset needed to compensate for all rows of header
-    row_offset_header = 1 + EXCEL_SHEET_SPIKE_ADDITIONALHEADERS
 
     # --- Setting for 'index_start'
     # Static setting
-    if 'INDEX_START' in globals():
+    if index_start_autodetect is not False:
+        settings["index_start"] = convert_lineToIndex(int(index_start_autodetect))
+        print("Substance application start set to data index " + str(settings["index_start"]) + ".")
+    elif 'INDEX_START' in globals():
         settings["index_start"] = int(INDEX_START)
         print("Substance application start set to data index " + str(settings["index_start"]) + ".")
     # Dynamic setting
@@ -334,12 +368,12 @@ def fetch_settings(filename, data):
 
         # Fetch index for start of substance application
         settings["index_start"] = 0
-        range_min = settings["baseline_count"] + 1 + row_offset_header
-        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - DURATION_COUNT - settings["washout_count_min"] + row_offset_header
+        range_min = convert_indexToLine(settings["baseline_count"] + 1)
+        range_max = len(data[EXCEL_SHEET_SPIKE_COL_TIME]) - DURATION_COUNT - convert_indexToLine(settings["washout_count_min"])
         while not int(settings["index_start"]) in range(range_min, range_max + 1):
             settings["index_start"] = int(input("Data index for the start of substance application (min. " + str(range_min) + ", max. " + str(range_max) + "): "))
 
-        settings["index_start"] = settings["index_start"] - row_offset_header
+        settings["index_start"] = convert_lineToIndex(settings["index_start"])
 
 
 
@@ -352,6 +386,15 @@ def fetch_settings(filename, data):
 
     return settings
 
+
+def fetch_startline(filename):
+    x = re.search("^line([0-9]*)_.*$", filename)
+
+    if x:
+        print("Autodetected start of application period at line " + str(x.group(1)) + ".")
+        return x.group(1)
+    else:
+        return False
 
 
 
@@ -376,6 +419,8 @@ def add_label_df(data, len_pre, len_dur, len_post, perc_change, stats, averages)
             states.append("Post")
 
         if stats:
+            states.append("Baseline Constant")
+
             # states.append("Shapiro t-stat pre")
             # states.append("Shapiro t-stat during")
             states.append("Shapiro p-value pre")
@@ -452,6 +497,12 @@ def combine_values(values):
 def append_statistics(values, stat):
 
     if stat is not None:
+
+        # Const Baseline
+        if stat["baseline_const"] is not None:
+            values.append(stat["baseline_const"])
+        else:
+            values.append("-")
 
         # Shapiro
         if stat["shapiro"]["x"] is not None and stat["shapiro"]["y"] is not None:
@@ -531,9 +582,30 @@ def add_dataframe_column(df, col_name, col_values):
 
 
 
+def calc_rowOffset():
+    return 1 + EXCEL_SHEET_SPIKE_ADDITIONALHEADERS
+
+
+def convert_lineToIndex(line):
+
+    # Calculate the offset needed to compensate for all rows of header
+    row_offset_header = calc_rowOffset()
+
+    return line - row_offset_header
+
+
+def convert_indexToLine(index):
+    # Calculate the offset needed to compensate for all rows of header
+    row_offset_header = calc_rowOffset()
+
+    return index + row_offset_header
+
+
+
 def calc_statistic(x,y):
 
     results = {
+        "baseline_const": None,
         "shapiro": {
             "x": None,
             "y": None
@@ -551,6 +623,10 @@ def calc_statistic(x,y):
     y = rem_empty_values(y)
 
     try:
+        # Check for consant baseline
+        results["baseline_const"] = calc_constantBaseline(x)
+        print("Results of baseline constant check: " + str(results["baseline_const"]))
+
         # Check for normal distribution
         results["shapiro"]["x"] = stat_shapiro(x)
         results["shapiro"]["y"] = stat_shapiro(y)
@@ -702,6 +778,17 @@ def stat_mannwhitneyu(x,y):
 
 
 
+
+def calc_constantBaseline(x, treshold=0.5):
+    start = (x[0] + x[1]) / 2
+    end = (x[-2] + x[-1]) / 2
+
+    change = start / end
+
+    if change > (1+treshold) or change < (1-treshold):
+        return False
+    
+    return True
 
 
 def calc_average(x):
