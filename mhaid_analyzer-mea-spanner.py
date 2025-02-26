@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -83,6 +83,7 @@ DURATION_COUNT = 5
 WASHOUT_COUNT_MIN = 3
 WASHOUT_COUNT_MAX = 10
 # INDEX_START = 23
+AUTOFILTER_CHANNELS = False
 
 
 
@@ -179,7 +180,7 @@ def do_xlsx_conversion(filename):
             if stat is not None:
             
                 # Check for significance
-                if stat["tteqvar"]["p"] <= PVAL_TRESHOLD or stat["ttwelch"]["p"] <= PVAL_TRESHOLD or stat["manwhitu"]["p"] <= PVAL_TRESHOLD:
+                if AUTOFILTER_CHANNELS is False or stat["tteqvar"]["p"] <= PVAL_TRESHOLD or stat["ttwelch"]["p"] <= PVAL_TRESHOLD or stat["manwhitu"]["p"] <= PVAL_TRESHOLD:
                     print("Baseline-Period is significant from Application-Period")
 
                     # Calculate averages (pre/baseline and dur)
@@ -285,6 +286,8 @@ def do_xlsx_conversion(filename):
         "Pre-Period Lines",
         "During-Period Lines",
         "Post-Period Lines",
+        "Autofilter Channels",
+        "Treshold P-Value",
         "Analysis Date",
         "Tool",
         "Tool Version",
@@ -296,6 +299,8 @@ def do_xlsx_conversion(filename):
         str(pre_index_end - pre_index_start + 1)   + " (" + str(convert_indexToLine(pre_index_start))  + " to " + str(convert_indexToLine(pre_index_end))  + ")",
         str(dur_index_end - dur_index_start + 1)   + " (" + str(convert_indexToLine(dur_index_start))  + " to " + str(convert_indexToLine(dur_index_end))  + ")",
         str(post_index_end - post_index_start + 1) + " (" + str(convert_indexToLine(post_index_start)) + " to " + str(convert_indexToLine(post_index_end)) + ")",
+        str(AUTOFILTER_CHANNELS),
+        str(PVAL_TRESHOLD),
         datetime.today().strftime('%Y-%m-%d'),
         "Analyzer for SpAnner Synopsis",
         __version__,
