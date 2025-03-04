@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -83,7 +83,7 @@ DURATION_COUNT = 5
 WASHOUT_COUNT_MIN = 3
 WASHOUT_COUNT_MAX = 10
 # INDEX_START = 23
-AUTOFILTER_CHANNELS = False
+AUTOFILTER_CHANNELS = True
 
 
 
@@ -289,6 +289,7 @@ def do_xlsx_conversion(filename):
         "Autofilter Channels",
         "Treshold P-Value",
         "Analysis Date",
+        "Channels detected",
         "Tool",
         "Tool Version",
         "Tool Author",
@@ -302,6 +303,7 @@ def do_xlsx_conversion(filename):
         str(AUTOFILTER_CHANNELS),
         str(PVAL_TRESHOLD),
         datetime.today().strftime('%Y-%m-%d'),
+        str(len(cols_channel)),
         "Analyzer for SpAnner Synopsis",
         __version__,
         __author__,
