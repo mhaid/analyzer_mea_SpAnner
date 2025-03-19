@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -152,131 +152,136 @@ def do_xlsx_conversion(filename):
     # Iterate trough all channels
     for col_channel in cols_channel:
 
-        # Find the index of the column
-        col_index = excel_sheet_spike.columns.get_loc(col_channel)
+        try:
 
-        # Get the column before
-        col_before_name = excel_sheet_spike.columns[col_index - 1]
+            # Find the index of the column
+            col_index = excel_sheet_spike.columns.get_loc(col_channel)
 
-        # Select this column from the DataFrame
-        col_before = excel_sheet_spike[col_before_name]
+            # Get the column before
+            col_before_name = excel_sheet_spike.columns[col_index - 1]
 
-        # Check if the column header is correct
-        if col_before[0] == "NoS/Minute":
+            # Select this column from the DataFrame
+            col_before = excel_sheet_spike[col_before_name]
 
-            # Extract spikes
-            spikes_pre_raw = extract_period(col_before, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
-            spikes_dur_raw = extract_period(col_before, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
-            spikes_post_raw = extract_period(col_before, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+            # Check if the column header is correct
+            if col_before[0] == "NoS/Minute":
 
 
-            # Calc statistics for channel
-            print("-----------------------------------------------------------------------")
-            print("Calculating statistics for " + col_channel)
-            stat = calc_statistic(spikes_pre_raw, spikes_dur_raw)
+                # Extract spikes
+                spikes_pre_raw = extract_period(col_before, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                spikes_dur_raw = extract_period(col_before, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                spikes_post_raw = extract_period(col_before, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
 
 
-            # Check for valid return
-            if stat is not None:
-            
-                # Check for significance
-                if AUTOFILTER_CHANNELS is False or stat["tteqvar"]["p"] <= PVAL_TRESHOLD or stat["ttwelch"]["p"] <= PVAL_TRESHOLD or stat["manwhitu"]["p"] <= PVAL_TRESHOLD:
-                    print("Baseline-Period is significant from Application-Period")
-
-                    # Calculate averages (pre/baseline and dur)
-                    average_spikes_pre_raw = calc_average(spikes_pre_raw)
-                    average_spikes_dur_raw = calc_average(spikes_dur_raw)
-                    print("-> Calculated spike averages for baseline-/application-period: " + str(average_spikes_pre_raw) + " / " + str(average_spikes_dur_raw))
+                # Calc statistics for channel
+                print("-----------------------------------------------------------------------")
+                print("Calculating statistics for " + col_channel)
+                stat = calc_statistic(spikes_pre_raw, spikes_dur_raw)
 
 
-                    # Combine spikes
-                    spikes_raw = combine_values([spikes_pre_raw,spikes_dur_raw,spikes_post_raw])
+                # Check for valid return
+                if stat is not None:
+                
+                    # Check for significance
+                    if AUTOFILTER_CHANNELS is False or stat["tteqvar"]["p"] <= PVAL_TRESHOLD or stat["ttwelch"]["p"] <= PVAL_TRESHOLD or stat["manwhitu"]["p"] <= PVAL_TRESHOLD:
+                        print("Baseline-Period is significant from Application-Period")
+
+                        # Calculate averages (pre/baseline and dur)
+                        average_spikes_pre_raw = calc_average(spikes_pre_raw)
+                        average_spikes_dur_raw = calc_average(spikes_dur_raw)
+                        print("-> Calculated spike averages for baseline-/application-period: " + str(average_spikes_pre_raw) + " / " + str(average_spikes_dur_raw))
 
 
-                    # Calc relative spikes
-                    spikes_rel = calc_period_rel(spikes_raw, average_spikes_pre_raw)
-
-                    # Calc %change baseline/application-period
-                    if average_spikes_pre_raw != 0:
-                        spikes_change = average_spikes_dur_raw / average_spikes_pre_raw * 100
-                    else:
-                        spikes_change = 0
-
-                    # Add lines to dataframe
-                    spikes_rel = append_line(spikes_rel, average_spikes_pre_raw)
-                    spikes_rel = append_line(spikes_rel, average_spikes_dur_raw)
-                    spikes_rel = append_line(spikes_rel, spikes_change)
+                        # Combine spikes
+                        spikes_raw = combine_values([spikes_pre_raw,spikes_dur_raw,spikes_post_raw])
 
 
-                    # Add statistics
-                    spikes_raw_stat = spikes_raw
-                    spikes_raw_stat.insert(0, spikes_change)
-                    spikes_raw_stat = append_statistics(spikes_raw_stat, stat)
+                        # Calc relative spikes
+                        spikes_rel = calc_period_rel(spikes_raw, average_spikes_pre_raw)
+
+                        # Calc %change baseline/application-period
+                        if average_spikes_pre_raw != 0:
+                            spikes_change = average_spikes_dur_raw / average_spikes_pre_raw * 100
+                        else:
+                            spikes_change = 0
+
+                        # Add lines to dataframe
+                        spikes_rel = append_line(spikes_rel, average_spikes_pre_raw)
+                        spikes_rel = append_line(spikes_rel, average_spikes_dur_raw)
+                        spikes_rel = append_line(spikes_rel, spikes_change)
 
 
-                    # ---- Compute Bursts per Minute
-                    # Merge time and NoB into one dataframe
-                    burst_df = merge_timeburst(excel_sheet_burst)
-
-                    # Fetch burst for channel
-                    burst_channel = burst_df[col_channel]
-                    print("Merged Burst per Minute in dataframe (" + str(len(burst_channel)) + " entries for channel)")
+                        # Add statistics
+                        spikes_raw_stat = spikes_raw
+                        spikes_raw_stat.insert(0, spikes_change)
+                        spikes_raw_stat = append_statistics(spikes_raw_stat, stat)
 
 
-                    # Extract bursts
-                    bursts_pre_raw = extract_period(burst_channel, pre_index_start, pre_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
-                    bursts_dur_raw = extract_period(burst_channel, dur_index_start, dur_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
-                    bursts_post_raw = extract_period(burst_channel, post_index_start, post_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+                        # ---- Compute Bursts per Minute
+                        # Merge time and NoB into one dataframe
+                        burst_df = merge_timeburst(excel_sheet_burst)
+
+                        # Fetch burst for channel
+                        burst_channel = burst_df[col_channel]
+                        print("Merged Burst per Minute in dataframe (" + str(len(burst_channel)) + " entries for channel)")
 
 
-                    # Calculate averages (pre/baseline and dur)
-                    average_bursts_pre_raw = calc_average(bursts_pre_raw)
-                    average_bursts_dur_raw = calc_average(bursts_dur_raw)
-                    print("-> Calculated burst averages for baseline-/application-period: " + str(average_bursts_pre_raw) + " / " + str(average_bursts_dur_raw))
-                    
-                    # Combine bursts
-                    bursts_raw = combine_values([bursts_pre_raw,bursts_dur_raw,bursts_post_raw])
-
-                    # Calc %change baseline/application-period
-                    if average_bursts_pre_raw != 0:
-                        bursts_change = average_bursts_dur_raw / average_bursts_pre_raw * 100
-                    else:
-                        bursts_change = 0
-
-                    # Add lines to dataframe
-                    bursts_raw = append_line(bursts_raw, average_bursts_pre_raw)
-                    bursts_raw = append_line(bursts_raw, average_bursts_dur_raw)
-                    bursts_raw = append_line(bursts_raw, bursts_change)
+                        # Extract bursts
+                        bursts_pre_raw = extract_period(burst_channel, pre_index_start, pre_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+                        bursts_dur_raw = extract_period(burst_channel, dur_index_start, dur_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
+                        bursts_post_raw = extract_period(burst_channel, post_index_start, post_index_end, EXCEL_SHEET_BURSTS_ADDITIONALHEADERS)
 
 
+                        # Calculate averages (pre/baseline and dur)
+                        average_bursts_pre_raw = calc_average(bursts_pre_raw)
+                        average_bursts_dur_raw = calc_average(bursts_dur_raw)
+                        print("-> Calculated burst averages for baseline-/application-period: " + str(average_bursts_pre_raw) + " / " + str(average_bursts_dur_raw))
+                        
+                        # Combine bursts
+                        bursts_raw = combine_values([bursts_pre_raw,bursts_dur_raw,bursts_post_raw])
 
-                    # Check for excitation or inhibition
-                    appl_group = 0
-                    if average_spikes_pre_raw < average_spikes_dur_raw:
-                        print("Excitation was detected")
+                        # Calc %change baseline/application-period
+                        if average_bursts_pre_raw != 0:
+                            bursts_change = average_bursts_dur_raw / average_bursts_pre_raw * 100
+                        else:
+                            bursts_change = 0
+
+                        # Add lines to dataframe
+                        bursts_raw = append_line(bursts_raw, average_bursts_pre_raw)
+                        bursts_raw = append_line(bursts_raw, average_bursts_dur_raw)
+                        bursts_raw = append_line(bursts_raw, bursts_change)
+
+
+
+                        # Check for excitation or inhibition
                         appl_group = 0
+                        if average_spikes_pre_raw < average_spikes_dur_raw:
+                            print("Excitation was detected")
+                            appl_group = 0
+
+                        else:
+                            print("Inhibition was detected")
+                            appl_group = 1
+
+
+                        # Add to dataframe
+                        add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Abs"], col_channel, spikes_raw_stat)
+                        add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Rel"], col_channel, spikes_rel)
+                        add_dataframe_column(results[settings["groups"][appl_group] + "_NoB_Abs"], col_channel, bursts_raw)
 
                     else:
-                        print("Inhibition was detected")
-                        appl_group = 1
-
-
-                    # Add to dataframe
-                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Abs"], col_channel, spikes_raw_stat)
-                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoS_Rel"], col_channel, spikes_rel)
-                    add_dataframe_column(results[settings["groups"][appl_group] + "_NoB_Abs"], col_channel, bursts_raw)
-
+                        print("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored")
+                
                 else:
-                    print("Baseline-Period is NOT significant from Application-Period")
-                    print("Channel will be ignored")
+                    raise Exception("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored\nStatistics could not be calculated")
             
             else:
-                print("Statistics could not be calculated")
-                print("Channel will be ignored")
-        
-        else:
-            print("Correct column could not be found")
-            print("Channel will be ignored")
+                raise Exception("Correct column could not be found\nChannel will be ignored")
+
+        except Exception as e:
+            print(e)
+            input("Press any key to continue")
+
 
 
     # Create about page
@@ -388,6 +393,14 @@ def fetch_settings(filename, data):
     # Static setting
     settings["index_end"] = settings["index_start"] + int(DURATION_COUNT) - 1
     print("Substance application end set to data index " + str(settings["index_end"]) + ".")
+
+
+
+
+    # --- Do Checks for Settings
+    if settings["index_start"] - settings["baseline_count"] < 0:
+        settings["baseline_count"] = settings["index_start"] - 1
+        print("Baseline: Corrected period length to " + str(settings["baseline_count"]) + ", this is the max. datapoints available before 'index_start'.")
 
 
 
