@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -157,20 +157,42 @@ def do_xlsx_conversion(filename):
             # Find the index of the column
             col_index = excel_sheet_spike.columns.get_loc(col_channel)
 
-            # Get the column before
-            col_before_name = excel_sheet_spike.columns[col_index - 1]
-
+            # Get the columnm "2P Amplitude"
+            col_P2PAmp_name = excel_sheet_spike.columns[col_index]
             # Select this column from the DataFrame
-            col_before = excel_sheet_spike[col_before_name]
+            col_P2PAmp = excel_sheet_spike[col_P2PAmp_name]
+            # Create output var
+            average_p2p = []
 
             # Check if the column header is correct
-            if col_before[0] == "NoS/Minute":
+            if col_P2PAmp[0].startswith("P2PAmp"):
+
+                # Extract spikes
+                p2p_pre = extract_period(col_P2PAmp, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                p2p_dur = extract_period(col_P2PAmp, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+
+                average_p2p_pre = calc_average(p2p_pre)
+                average_p2p_dur = calc_average(p2p_dur)
+
+                average_p2p = append_line(average_p2p, average_p2p_pre)
+                average_p2p = append_line(average_p2p, average_p2p_dur)
+
+
+
+            # Get the column before
+            col_NoS_name = excel_sheet_spike.columns[col_index - 1]
+
+            # Select this column from the DataFrame
+            col_NoS = excel_sheet_spike[col_NoS_name]
+
+            # Check if the column header is correct
+            if col_NoS[0] == "NoS/Minute":
 
 
                 # Extract spikes
-                spikes_pre_raw = extract_period(col_before, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
-                spikes_dur_raw = extract_period(col_before, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
-                spikes_post_raw = extract_period(col_before, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                spikes_pre_raw = extract_period(col_NoS, pre_index_start, pre_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                spikes_dur_raw = extract_period(col_NoS, dur_index_start, dur_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
+                spikes_post_raw = extract_period(col_NoS, post_index_start, post_index_end, EXCEL_SHEET_SPIKE_ADDITIONALHEADERS)
 
 
                 # Calc statistics for channel
@@ -212,8 +234,7 @@ def do_xlsx_conversion(filename):
 
 
                         # Add statistics
-                        spikes_raw_stat = spikes_raw
-                        spikes_raw_stat.insert(0, spikes_change)
+                        spikes_raw_stat = combine_values([average_p2p,[spikes_change],spikes_raw])
                         spikes_raw_stat = append_statistics(spikes_raw_stat, stat)
 
 
@@ -273,6 +294,8 @@ def do_xlsx_conversion(filename):
                         print("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored")
                 
                 else:
+                    print(spikes_pre_raw)
+                    print(spikes_dur_raw)
                     raise Exception("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored\nStatistics could not be calculated")
             
             else:
@@ -427,6 +450,8 @@ def add_label_df(data, len_pre, len_dur, len_post, perc_change, stats, averages)
         states = []
 
         if perc_change:
+            states.append("2P_Amp Pre")
+            states.append("2P_Amp Dur")
             states.append("%change")
 
         for i in range(len_pre):
