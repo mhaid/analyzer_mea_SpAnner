@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.4"
+__version__ = "0.3.5"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -431,7 +431,7 @@ def fetch_settings(filename, data):
 
 
 def fetch_startline(filename):
-    x = re.search("^line([0-9]*)_.*$", filename)
+    x = re.search(r"^line\s?([0-9]*)[_\s]+.*$", filename)
 
     if x:
         print("Autodetected start of application period at line " + str(x.group(1)) + ".")
