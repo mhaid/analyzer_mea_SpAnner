@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.3.5"
+__version__ = "0.4.0"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -77,6 +77,7 @@ EXCEL_SHEET_BURST_FIELDTYPE_BURST = "NoB/Minute"  # FieldType of Burst per Minut
 
 
 PVAL_TRESHOLD = 0.06
+CONSTBASEL_TRESHOLD = 0.5
 # below setting contants can be made dynamic by adding a # at the start of the line. The user will be asked for input
 BASELINE_COUNT = 7
 DURATION_COUNT = 5
@@ -121,6 +122,17 @@ def do_xlsx_conversion(filename):
 
     # Create result object
     results = {}
+
+    # Create overview output
+    overview_out = {
+        "ch_included": 0,
+        "ch_valid": 0,
+        "ch_invalid": 0,
+        "ch_pError": 0,
+        "ch_pError": 0,
+        "ch_unstable": 0,
+        "ch_excluded": 0
+    }
 
     # Calculate index of periods pre, during, post
     pre_index_start = settings["index_start"] - settings["baseline_count"]
@@ -208,6 +220,27 @@ def do_xlsx_conversion(filename):
                     if AUTOFILTER_CHANNELS is False or stat["tteqvar"]["p"] <= PVAL_TRESHOLD or stat["ttwelch"]["p"] <= PVAL_TRESHOLD or stat["manwhitu"]["p"] <= PVAL_TRESHOLD:
                         print("Baseline-Period is significant from Application-Period")
 
+
+                        # Check statistic
+                        overview_out["ch_included"] += 1
+                        valid = True
+                        if stat[stat["comp"]]["p"] > PVAL_TRESHOLD:
+                            valid = False
+                            # Mark channel as invalid pError
+                            overview_out["ch_pError"] += 1
+                        if stat["baseline_const"] == False:
+                            valid = False
+                            # Mark channel as invalid unstable Baseline
+                            overview_out["ch_unstable"] += 1
+
+                        if valid:
+                            # Mark channel as valid
+                            overview_out["ch_valid"] += 1
+                        else:
+                            # Mark channel as invalid
+                            overview_out["ch_invalid"] += 1
+
+
                         # Calculate averages (pre/baseline and dur)
                         average_spikes_pre_raw = calc_average(spikes_pre_raw)
                         average_spikes_dur_raw = calc_average(spikes_dur_raw)
@@ -291,9 +324,15 @@ def do_xlsx_conversion(filename):
                         add_dataframe_column(results[settings["groups"][appl_group] + "_NoB_Abs"], col_channel, bursts_raw)
 
                     else:
+                        # Mark channel as excluded
+                        overview_out["ch_excluded"] += 1
+
                         print("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored")
                 
                 else:
+                    # Mark channel as excluded
+                    overview_out["ch_excluded"] += 1
+
                     print(spikes_pre_raw)
                     print(spikes_dur_raw)
                     raise Exception("Baseline-Period is NOT significant from Application-Period\nChannel will be ignored\nStatistics could not be calculated")
@@ -315,9 +354,16 @@ def do_xlsx_conversion(filename):
         "During-Period Lines",
         "Post-Period Lines",
         "Autofilter Channels",
-        "Treshold P-Value",
+        "Treshold for significant P-Value",
+        "Treshold for constant baseline (%change)",
         "Analysis Date",
         "Channels detected",
+        "-> included ch",
+        "--> valid ch",
+        "--> invalid but not excluded ch",
+        "---> pError",
+        "---> unstable baseline",
+        "-> excluded ch",
         "Tool",
         "Tool Version",
         "Tool Author",
@@ -325,13 +371,20 @@ def do_xlsx_conversion(filename):
     ]
     about["Value"] = [
         filename,
-        str(pre_index_end - pre_index_start + 1)   + " (" + str(convert_indexToLine(pre_index_start))  + " to " + str(convert_indexToLine(pre_index_end))  + ")",
-        str(dur_index_end - dur_index_start + 1)   + " (" + str(convert_indexToLine(dur_index_start))  + " to " + str(convert_indexToLine(dur_index_end))  + ")",
-        str(post_index_end - post_index_start + 1) + " (" + str(convert_indexToLine(post_index_start)) + " to " + str(convert_indexToLine(post_index_end)) + ")",
+        str(pre_index_end - pre_index_start + 1)   + " (Line# " + str(convert_indexToLine(pre_index_start))  + " to " + str(convert_indexToLine(pre_index_end))  + ")",
+        str(dur_index_end - dur_index_start + 1)   + " (Line# " + str(convert_indexToLine(dur_index_start))  + " to " + str(convert_indexToLine(dur_index_end))  + ")",
+        str(post_index_end - post_index_start + 1) + " (Line# " + str(convert_indexToLine(post_index_start)) + " to " + str(convert_indexToLine(post_index_end)) + ")",
         str(AUTOFILTER_CHANNELS),
         str(PVAL_TRESHOLD),
+        str(CONSTBASEL_TRESHOLD),
         datetime.today().strftime('%Y-%m-%d'),
         str(len(cols_channel)),
+        str(overview_out["ch_included"]),
+        " " + str(overview_out["ch_valid"]) + " (" + str(round(overview_out["ch_valid"] / overview_out["ch_included"] * 100,2)) + "%)",
+        " " + str(overview_out["ch_invalid"]) + " (" + str(round(overview_out["ch_invalid"] / overview_out["ch_included"] * 100,2)) + "%)",
+        "  " + str(overview_out["ch_pError"]),
+        "  " + str(overview_out["ch_unstable"]),
+        str(overview_out["ch_excluded"]),
         "Analyzer for SpAnner Synopsis",
         __version__,
         __author__,
@@ -824,7 +877,7 @@ def stat_mannwhitneyu(x,y):
 
 
 
-def calc_constantBaseline(x, treshold=0.5):
+def calc_constantBaseline(x, treshold=CONSTBASEL_TRESHOLD):
     start = (x[0] + x[1]) / 2
     end = (x[-2] + x[-1]) / 2
 
