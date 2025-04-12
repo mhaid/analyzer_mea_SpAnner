@@ -53,7 +53,7 @@ __author__ = "Morris Haid"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Morris Haid"]
 __license__ = "MIT License"
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __maintainer__ = "Morris Haid"
 __email__ = "morris.haid@hhu.de"
 __status__ = "Prototype"
@@ -369,6 +369,20 @@ def do_xlsx_conversion(filename):
         "Tool Author",
         "Tool Licence",
     ]
+
+    # create values
+    try:
+        value_ch_valid = " " + str(overview_out["ch_valid"]) + " (" + str(round(overview_out["ch_valid"] / overview_out["ch_included"] * 100,2)) + "%)"
+    except:
+        value_ch_valid = "N/A (Calc Error)"
+
+    try:
+        value_ch_invalid = " " + str(overview_out["ch_invalid"]) + " (" + str(round(overview_out["ch_invalid"] / overview_out["ch_included"] * 100,2)) + "%)"
+    except:
+        value_ch_invalid = "N/A (Calc Error)"
+
+
+
     about["Value"] = [
         filename,
         str(pre_index_end - pre_index_start + 1)   + " (Line# " + str(convert_indexToLine(pre_index_start))  + " to " + str(convert_indexToLine(pre_index_end))  + ")",
@@ -380,8 +394,8 @@ def do_xlsx_conversion(filename):
         datetime.today().strftime('%Y-%m-%d'),
         str(len(cols_channel)),
         str(overview_out["ch_included"]),
-        " " + str(overview_out["ch_valid"]) + " (" + str(round(overview_out["ch_valid"] / overview_out["ch_included"] * 100,2)) + "%)",
-        " " + str(overview_out["ch_invalid"]) + " (" + str(round(overview_out["ch_invalid"] / overview_out["ch_included"] * 100,2)) + "%)",
+        value_ch_valid,
+        value_ch_invalid,
         "  " + str(overview_out["ch_pError"]),
         "  " + str(overview_out["ch_unstable"]),
         str(overview_out["ch_excluded"]),
@@ -484,7 +498,7 @@ def fetch_settings(filename, data):
 
 
 def fetch_startline(filename):
-    x = re.search(r"^line\s?([0-9]*)[_\s]+.*$", filename)
+    x = re.search(r"^[L|l]ine\s?([0-9]*)[_\s]+.*$", filename)
 
     if x:
         print("Autodetected start of application period at line " + str(x.group(1)) + ".")
